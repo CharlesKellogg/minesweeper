@@ -1,2 +1,2 @@
 minesweeper:
-	g++ minesweeper.c -lncurses -o minesweeper
+	gcc -lncurses minesweeper.c

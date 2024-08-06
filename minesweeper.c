@@ -39,7 +39,6 @@ void initialize_cover(enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT])
 		}
 	}
 }
-// TODO: Find out why certain cells on the left are not drawn, add mine count and timer and other controls messages
 
 bool cell_is_within_radius(int center_x, int center_y, int cell_x, int cell_y, int radius)
 {
@@ -74,6 +73,10 @@ void place_mines(char board[BOARD_WIDTH][BOARD_HEIGHT], int first_swept_x, int f
 		if (board[mine_x][mine_y] == MINE) { continue; }
 
 		/* Place a mine and decrement the number of mines remaining */
+		/*
+		 * BUG: The following line for some reason sometimes sets the cover in its space to blank or X.
+		 * The board value can be anything. I have no idea why this happens.
+		 */
 		board[mine_x][mine_y] = MINE;
 		mines_to_place--;
 	}
@@ -126,15 +129,17 @@ void initialize_board(char board[BOARD_WIDTH][BOARD_HEIGHT], int first_swept_x, 
 	}
 }
 
-void toggle_flag(enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT], int x, int y)
+void toggle_flag(enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT], int x, int y, int *p_mine_count)
 {
-	if (cover[x][y] == covered)
+	if (cover[x][y] == covered && p_mine_count > 0)
 	{
 		cover[x][y] = flagged;
+		*p_mine_count = *p_mine_count - 1;
 	}
 	else if (cover[x][y] == flagged)
 	{
 		cover[x][y] = covered;
+		*p_mine_count = *p_mine_count + 1;
 	}
 }
 
@@ -216,6 +221,8 @@ void draw_board(
 				case uncovered:
 					mvwprintw(board_win, y, x * 2, "%c", board[x][y]);
 					break;
+				default:
+					mvwprintw(board_win, y, x * 2, "%c", '!');
 			}
 
 			/* Unset highlight rules unless it's a row so we will highlight the next space as well */
@@ -242,6 +249,8 @@ void run_game_loop()
 	enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT];
 	initialize_cover(cover);
 	bool board_initialized = false;
+	/* Set initial mine count */
+	int mine_count = INITIAL_MINE_COUNT;
 	/* Initialize the highlighted column and row */
 	int target_x = BOARD_WIDTH / 2;
 	int target_y = BOARD_HEIGHT / 2;
@@ -251,7 +260,9 @@ void run_game_loop()
 		/* Print the instructions */
 		mvprintw(0, 0, "Use the hjkl keys to move the cursor");
 		mvprintw(1, 0, "Press q to quit");
+		mvprintw(3, 0, "Mine Count: %d", mine_count);
 		refresh();
+		/* TODO: Add more controls messages, add timer */
 
 		/* Draw the board and cover */
 		draw_board(board, cover, target_x, target_y);
@@ -285,7 +296,7 @@ void run_game_loop()
 				break;
 			case INPUT_FLAG:
 				/* Toggle flag */
-				toggle_flag(cover, target_x, target_y);
+				toggle_flag(cover, target_x, target_y, &mine_count);
 				break;
 			case INPUT_QUIT:
 				/* Quit the game */
