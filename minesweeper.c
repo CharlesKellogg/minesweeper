@@ -274,6 +274,20 @@ void draw_board(
 	delwin(board_box_win);
 }
 
+bool check_for_win(char board[BOARD_WIDTH][BOARD_HEIGHT], enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT])
+{
+	for (int x = 0; x < BOARD_WIDTH; x++)
+	{
+		for (int y = 0; y < BOARD_HEIGHT; y++)
+		{
+			/* If there is a remaining covered cell that is not a mine, victory has not been achieved */
+			if (cover[x][y] == covered && board[x][y] != MINE) return false;
+		}
+	}
+
+	return true;
+}
+
 void run_game_loop()
 {
 	/* Create the board and cover, initialize the cover, and set the status to uninitialized */
@@ -286,9 +300,13 @@ void run_game_loop()
 	int mine_count = INITIAL_MINE_COUNT;
 	bool board_initialized = false;
 	bool game_over = false;
+	bool game_won = false;
 
 	bool running = true;
 	while (running) {
+		/* Check for a win */
+		if (check_for_win(board, cover)) game_won = true;
+
 		/* TODO: Add reset function and keybind */
 		/* Print the instructions */
 		mvprintw(0, 0, "Use the hjkl keys to move the cursor");
@@ -303,6 +321,9 @@ void run_game_loop()
 		{
 			mvprintw(4, 0, ":)");
 		}
+		/* Print the Game Over/You Win message */
+		/* TODO: Test if the win condition works and also add game over message */
+		if (game_won) mvprintw(5, 0, "You Win!");
 		refresh();
 		/* TODO: Add more controls messages, add timer */
 
@@ -317,7 +338,7 @@ void run_game_loop()
 		char input = getch();
 
 		/* Only allow certain inputs after game over */
-		if (game_over && input != INPUT_QUIT) continue;
+		if ((game_over || game_won) && input != INPUT_QUIT) continue;
 
 		/* Handle user input */
 		switch (input) {
