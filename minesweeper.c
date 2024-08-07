@@ -22,6 +22,8 @@
 #define INPUT_SWEEP ' '
 #define INPUT_QUIT 'q'
 
+#define BOARD_OFFSET_TOP 6
+
 enum cover_cell { covered, uncovered, flagged };
 
 int random_number(int min_num, int max_num)
@@ -45,12 +47,12 @@ bool cell_is_within_radius(int center_x, int center_y, int cell_x, int cell_y, i
 	/* Get the distance from the center in the x direction and return false if it's larger than the radius */
 	int x_distance = center_x - cell_x;
 	if (x_distance < 0) x_distance *= -1;
-	if (x_distance > radius) { return false; }
+	if (x_distance > radius) return false;
 
 	/* Get the distance from the center in the y direction and return false if it's larger than the radius */
 	int y_distance = center_y - cell_y;
 	if (y_distance < 0) y_distance *= -1;
-	if (y_distance > radius) { return false; }
+	if (y_distance > radius) return false;
 
 	/* If the cell is within the radius in both the x and y directions, return true */
 	return true;
@@ -67,10 +69,10 @@ void place_mines(char board[BOARD_WIDTH][BOARD_HEIGHT], int first_swept_x, int f
 		int mine_y = random_number(0, BOARD_HEIGHT);
 
 		/* Mines cannot be placed within a certain radius of the first cell swept */
-		if (cell_is_within_radius(first_swept_x, first_swept_y, mine_x, mine_y, FIRST_SWEEP_SAFE_RADIUS)) { continue; }
+		if (cell_is_within_radius(first_swept_x, first_swept_y, mine_x, mine_y, FIRST_SWEEP_SAFE_RADIUS)) continue;
 
 		/* Don't place a mine where there is already a mine */
-		if (board[mine_x][mine_y] == MINE) { continue; }
+		if (board[mine_x][mine_y] == MINE) continue;
 
 		/* Place a mine and decrement the number of mines remaining */
 		/*
@@ -91,10 +93,18 @@ int get_adjacent_mine_count(char board[BOARD_WIDTH][BOARD_HEIGHT], int cell_x, i
 		for (int adjacent_cell_y = cell_y - 1; adjacent_cell_y <= cell_y + 1; adjacent_cell_y++)
 		{
 			/* Skip this pass if we are out of bounds */
-			if ((adjacent_cell_x < 0) | (adjacent_cell_y < 0) | adjacent_cell_x >= BOARD_WIDTH | adjacent_cell_y >= BOARD_HEIGHT) { continue; }
+			if (
+				(adjacent_cell_x < 0) |
+				(adjacent_cell_y < 0) |
+				adjacent_cell_x >= BOARD_WIDTH |
+				adjacent_cell_y >= BOARD_HEIGHT
+			)
+			{
+				continue;
+			}
 
 			/* Increment the count if this cell contains a mine */
-			if (board[adjacent_cell_x][adjacent_cell_y] == MINE) { adjacent_mine_count++; }
+			if (board[adjacent_cell_x][adjacent_cell_y] == MINE) adjacent_mine_count++;
 		}
 	}
 
@@ -143,13 +153,22 @@ void toggle_flag(enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT], int x, int y,
 	}
 }
 
-void uncover_cell(char board[BOARD_WIDTH][BOARD_HEIGHT], enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT], int x, int y)
+void uncover_cell(
+	char board[BOARD_WIDTH][BOARD_HEIGHT],
+	enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT],
+	int x,
+	int y,
+	bool *p_game_over
+)
 {
 	/* Only uncover if this is a covered cell */
-	if (cover[x][y] != covered) { return; }
+	if (cover[x][y] != covered) return;
 
 	/* Set this cell to uncovered */
 	cover[x][y] = uncovered;
+
+	/* If this is a mine, end the game */
+	if (board[x][y] == MINE) *p_game_over = true;
 
 	/* If this is not a blank cell then return here */
 	if (board[x][y] != BLANK_CELL) { return; }
@@ -160,7 +179,7 @@ void uncover_cell(char board[BOARD_WIDTH][BOARD_HEIGHT], enum cover_cell cover[B
 		{
 			/* Don't try to uncover out-of-bounds cells */
 			if (chain_x < 0 | chain_y < 0 | chain_x >= BOARD_WIDTH | chain_y >= BOARD_HEIGHT) { continue; }
-			uncover_cell(board, cover, chain_x, chain_y);
+			uncover_cell(board, cover, chain_x, chain_y, p_game_over);
 		}
 	}
 }
@@ -170,7 +189,8 @@ void sweep_cell(
 	enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT],
 	int x,
 	int y,
-	bool *p_board_initialized
+	bool *p_board_initialized,
+	bool *p_game_over
 )
 {
 	/* Initialize the board if we haven't yet */
@@ -181,20 +201,21 @@ void sweep_cell(
 	}
 
 	/* Don't do anything if this cell is not covered */
-	if (cover[x][y] != covered) { return; }
+	if (cover[x][y] != covered) return;
 
-	uncover_cell(board, cover, x, y);
+	uncover_cell(board, cover, x, y, p_game_over);
 }
 
 void draw_board(
 	char board[BOARD_WIDTH][BOARD_HEIGHT],
 	enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT],
 	int target_x,
-	int target_y
+	int target_y,
+	bool game_over
 )
 {
 	/* Create the board box window */
-	WINDOW* board_box_win = newwin(BOARD_HEIGHT + 2, BOARD_WIDTH * 2 + 1, 4, 0);
+	WINDOW* board_box_win = newwin(BOARD_HEIGHT + 2, BOARD_WIDTH * 2 + 1, BOARD_OFFSET_TOP, 0);
 	refresh();
 	/* Draw the surrounding box */
 	box(board_box_win, 0, 0);
@@ -208,28 +229,39 @@ void draw_board(
 		for (int y = 0; y < BOARD_HEIGHT; y++)
 		{
 			/* Set highlight rules */
-			if (x == target_x | y == target_y) { wattron(board_win, A_STANDOUT); }
+			if (x == target_x | y == target_y) wattron(board_win, A_STANDOUT);
 
-			/* Print the cover  */
-			switch (cover[x][y]) {
-				case covered:
-					mvwprintw(board_win, y, x * 2, "%c", COVERED_CELL);
-					break;
-				case flagged:
-					mvwprintw(board_win, y, x * 2, "%c", FLAGGED_CELL);
-					break;
-				case uncovered:
-					mvwprintw(board_win, y, x * 2, "%c", board[x][y]);
-					break;
-				default:
-					mvwprintw(board_win, y, x * 2, "%c", '!');
+			/* Move the cursor to the cell */
+			wmove(board_win, y, x * 2);
+
+			if (game_over) {
+				wprintw(board_win, "%c", board[x][y]);
 			}
+			else
+			{
+				/* Print the cover  */
+				switch (cover[x][y]) {
+					case covered:
+						wprintw(board_win, "%c", COVERED_CELL);
+						break;
+					case flagged:
+						wprintw(board_win, "%c", FLAGGED_CELL);
+						break;
+					case uncovered:
+						wprintw(board_win, "%c", board[x][y]);
+						break;
+					default:
+						wprintw(board_win, "%c", '!');
+				}
+			}
+			/* TODO: Maybe add a symbol for incorrect flag */
+
 
 			/* Unset highlight rules unless it's a row so we will highlight the next space as well */
-			if (y != target_y) { wattroff(board_win, A_STANDOUT); }
+			if (y != target_y) wattroff(board_win, A_STANDOUT);
 
 			/* Print a space so we have a gap but it can still be highlighted */
-			if (x < BOARD_WIDTH - 1) { mvwprintw(board_win, y, x * 2 + 1, " "); }
+			if (x < BOARD_WIDTH - 1) mvwprintw(board_win, y, x * 2 + 1, " ");
 
 			/* Unset highlight rules */
 			wattroff(board_win, A_STANDOUT);
@@ -248,59 +280,74 @@ void run_game_loop()
 	char board[BOARD_WIDTH][BOARD_HEIGHT];
 	enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT];
 	initialize_cover(cover);
-	bool board_initialized = false;
-	/* Set initial mine count */
-	int mine_count = INITIAL_MINE_COUNT;
-	/* Initialize the highlighted column and row */
+	/* Set inital values */
 	int target_x = BOARD_WIDTH / 2;
 	int target_y = BOARD_HEIGHT / 2;
+	int mine_count = INITIAL_MINE_COUNT;
+	bool board_initialized = false;
+	bool game_over = false;
 
 	bool running = true;
 	while (running) {
+		/* TODO: Add reset function and keybind */
 		/* Print the instructions */
 		mvprintw(0, 0, "Use the hjkl keys to move the cursor");
 		mvprintw(1, 0, "Press q to quit");
 		mvprintw(3, 0, "Mine Count: %d", mine_count);
+		/* Print the face */
+		if (game_over)
+		{
+			mvprintw(4, 0, ":(");
+		}
+		else
+		{
+			mvprintw(4, 0, ":)");
+		}
 		refresh();
 		/* TODO: Add more controls messages, add timer */
 
 		/* Draw the board and cover */
-		draw_board(board, cover, target_x, target_y);
+		draw_board(board, cover, target_x, target_y, game_over);
 
 		/* Move the cursor back to the start */
 		mvcur(0, 0, 0, 0);
 		refresh();
 
-		/* Get the user input */
+		/* Get user input */
 		char input = getch();
+
+		/* Only allow certain inputs after game over */
+		if (game_over && input != INPUT_QUIT) continue;
+
+		/* Handle user input */
 		switch (input) {
+			case INPUT_QUIT:
+				/* Quit the game */
+				running = false;
+				break;
 			case INPUT_LEFT:
 				/* Move left */
-				if (target_x > 0) { target_x--; }
+				if (target_x > 0) target_x--;
 				break;
 			case INPUT_RIGHT:
 				/* Move right */
-				if (target_x < BOARD_WIDTH - 1) { target_x++; }
+				if (target_x < BOARD_WIDTH - 1) target_x++;
 				break;
 			case INPUT_DOWN:
 				/* Move down */
-				if (target_y < BOARD_HEIGHT - 1) { target_y++; }
+				if (target_y < BOARD_HEIGHT - 1) target_y++;
 				break;
 			case INPUT_UP:
 				/* Move up */
-				if (target_y > 0) { target_y--; }
+				if (target_y > 0) target_y--;
 				break;
 			case INPUT_SWEEP:
 				/* Sweep cell */
-				sweep_cell(board, cover, target_x, target_y, &board_initialized);
+				sweep_cell(board, cover, target_x, target_y, &board_initialized, &game_over);
 				break;
 			case INPUT_FLAG:
 				/* Toggle flag */
 				toggle_flag(cover, target_x, target_y, &mine_count);
-				break;
-			case INPUT_QUIT:
-				/* Quit the game */
-				running = false;
 				break;
 		}
 	}
