@@ -338,7 +338,7 @@ void run_game_loop()
 
 		/* TODO: Add reset function and keybind */
 		/* Print the instructions */
-		mvprintw(0, 0, "Use the hjkl keys to move the cursor");
+		mvprintw(0, 0, "Use the hjkl keys to move the cursor, SPACE to sweep, and f to place or remove a flag.");
 		mvprintw(1, 0, "Press q to quit");
 		mvprintw(3, 0, "Mine Count: %d", mine_count);
 		/* Print the face */
