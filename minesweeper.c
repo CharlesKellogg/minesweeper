@@ -58,7 +58,12 @@ bool cell_is_within_radius(int center_x, int center_y, int cell_x, int cell_y, i
 	return true;
 }
 
-void place_mines(char board[BOARD_WIDTH][BOARD_HEIGHT], int first_swept_x, int first_swept_y)
+void place_mines(
+	char board[BOARD_WIDTH][BOARD_HEIGHT],
+	enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT],
+	int first_swept_x,
+	int first_swept_y
+)
 {
 	int mines_to_place = INITIAL_MINE_COUNT;
 
@@ -81,6 +86,25 @@ void place_mines(char board[BOARD_WIDTH][BOARD_HEIGHT], int first_swept_x, int f
 		 */
 		board[mine_x][mine_y] = MINE;
 		mines_to_place--;
+	}
+
+	/* This is to "fix" the bug described above. It is not very elegant but it mostly works. */
+	/* If you know of a better way to fix this, please let me know. It bothers me. */
+	for (int x = 0; x < BOARD_WIDTH; x++)
+	{
+		for (int y = 0; y < BOARD_HEIGHT; y++)
+		{
+			switch (cover[x][y]) {
+				case covered:
+					break;
+				case uncovered:
+					break;
+				case flagged:
+					break;
+				default:
+					cover[x][y] = covered;
+			}
+		}
 	}
 }
 
@@ -111,7 +135,12 @@ int get_adjacent_mine_count(char board[BOARD_WIDTH][BOARD_HEIGHT], int cell_x, i
 	return adjacent_mine_count;
 }
 
-void initialize_board(char board[BOARD_WIDTH][BOARD_HEIGHT], int first_swept_x, int first_swept_y)
+void initialize_board(
+	char board[BOARD_WIDTH][BOARD_HEIGHT],
+	enum cover_cell cover[BOARD_WIDTH][BOARD_HEIGHT],
+	int first_swept_x,
+	int first_swept_y
+)
 {
 	/* First set every cell to blank */
 	for (int x = 0; x < BOARD_WIDTH; x++)
@@ -123,7 +152,7 @@ void initialize_board(char board[BOARD_WIDTH][BOARD_HEIGHT], int first_swept_x, 
 	}
 	
 	/* Place the mines */
-	place_mines(board, first_swept_x, first_swept_y);
+	place_mines(board, cover, first_swept_x, first_swept_y);
 
 	/* Assign numbers */
 	char single_digit_int_chars[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
@@ -196,7 +225,7 @@ void sweep_cell(
 	/* Initialize the board if we haven't yet */
 	if (!*p_board_initialized)
 	{
-		initialize_board(board, x, y);
+		initialize_board(board, cover, x, y);
 		*p_board_initialized = true;
 	}
 
